@@ -1,0 +1,240 @@
+# docker-compose.test.yml
+
+services:
+  # -------------------------
+  # Test PostgreSQL Databases
+  # -------------------------
+
+  postgres_product_test_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresProductsTestCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase_test
+    ports:
+      - "5441:5432"  # Different host port for testing
+    volumes:
+      - postgres_product_test_db:/var/lib/postgresql/data
+    networks:
+      - default
+
+  postgres_inventory_test_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresInventoryTestCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase_test
+    ports:
+      - "5442:5432"
+    volumes:
+      - postgres_inventory_test_db:/var/lib/postgresql/data
+    networks:
+      - default
+
+  postgres_order_test_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresOrdersTestCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase_test
+    ports:
+      - "5443:5432"
+    volumes:
+      - postgres_order_test_db:/var/lib/postgresql/data
+    networks:
+      - default
+
+  postgres_notification_test_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresNotificationTestCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase_test
+    ports:
+      - "5444:5432"
+    volumes:
+      - postgres_notification_test_db:/var/lib/postgresql/data
+    networks:
+      - default
+
+  postgres_user_test_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresUserTestCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase_test
+    ports:
+      - "5445:5432"
+    volumes:
+      - postgres_user_test_db:/var/lib/postgresql/data
+    networks:
+      - default
+
+  postgres_payment_test_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresPaymentTestCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase_test
+    ports:
+      - "5446:5432"
+    volumes:
+      - postgres_payment_test_db:/var/lib/postgresql/data
+    networks:
+      - default
+
+  # -------------------------
+  # Test Microservices
+  # -------------------------
+
+  # Test Product Service
+  product_service_test:
+    build:
+      context: .
+      dockerfile: product_api/Dockerfile.dev
+    container_name: ProductServiceTestCont
+    volumes:
+      - ./product_api:/code/
+      - ./topic_generator:/code/topic_generator/
+    depends_on:
+      postgres_product_test_db:
+        condition: service_started
+    ports:
+      - "8006:8000"  # Different host port for testing
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=broker:19092  # Kafka is mocked; no need for test broker
+      - DATABASE_URL=postgresql://ziakhan:my_password@postgres_product_test_db:5432/mydatabase_test
+    networks:
+      - default
+
+  # Test Inventory Service
+  inventory_service_test:
+    build:
+      context: .
+      dockerfile: inventory_api/Dockerfile.dev
+    container_name: InventoryServiceTestCont
+    volumes:
+      - ./inventory_api:/code/
+      - ./topic_generator:/code/topic_generator/
+    depends_on:
+      postgres_inventory_test_db:
+        condition: service_started
+    ports:
+      - "8007:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=broker:19092
+      - DATABASE_URL=postgresql://ziakhan:my_password@postgres_inventory_test_db:5432/mydatabase_test
+    networks:
+      - default
+
+  # Test Order Service
+  order_service_test:
+    build:
+      context: .
+      dockerfile: order_api/Dockerfile.dev
+    container_name: OrderServiceTestCont
+    volumes:
+      - ./order_api:/code/
+      - ./topic_generator:/code/topic_generator/
+    depends_on:
+      postgres_order_test_db:
+        condition: service_started
+    ports:
+      - "8008:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=broker:19092
+      - DATABASE_URL=postgresql://ziakhan:my_password@postgres_order_test_db:5432/mydatabase_test
+    networks:
+      - default
+
+  # Test Notification Service
+  notification_service_test:
+    build:
+      context: .
+      dockerfile: notification_api/Dockerfile.dev
+    container_name: NotificationServiceTestCont
+    volumes:
+      - ./notification_api:/code/
+      - ./topic_generator:/code/topic_generator/
+    depends_on:
+      postgres_notification_test_db:
+        condition: service_started
+    ports:
+      - "8009:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=broker:19092
+      - DATABASE_URL=postgresql://ziakhan:my_password@postgres_notification_test_db:5432/mydatabase_test
+    networks:
+      - default
+
+  # Test User Service
+  user_service_test:
+    build:
+      context: .
+      dockerfile: user_api/Dockerfile.dev
+    container_name: UserServiceTestCont
+    volumes:
+      - ./user_api:/code/
+      - ./topic_generator:/code/topic_generator/
+    depends_on:
+      postgres_user_test_db:
+        condition: service_started
+    ports:
+      - "8010:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=broker:19092
+      - DATABASE_URL=postgresql://ziakhan:my_password@postgres_user_test_db:5432/mydatabase_test
+    networks:
+      - default
+
+  # Test Payment Service
+  payment_service_test:
+    build:
+      context: .
+      dockerfile: payment_api/Dockerfile.dev
+    container_name: PaymentServiceTestCont
+    volumes:
+      - ./payment_api:/code/
+      - ./topic_generator:/code/topic_generator/
+    depends_on:
+      postgres_payment_test_db:
+        condition: service_started
+    ports:
+      - "8011:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=broker:19092
+      - DATABASE_URL=postgresql://ziakhan:my_password@postgres_payment_test_db:5432/mydatabase_test
+    networks:
+      - default
+
+volumes:
+  # Test PostgreSQL Volumes
+  postgres_product_test_db:
+    driver: local
+  postgres_inventory_test_db:
+    driver: local
+  postgres_order_test_db:
+    driver: local
+  postgres_notification_test_db:
+    driver: local
+  postgres_user_test_db:
+    driver: local
+  postgres_payment_test_db:
+    driver: local
+
+networks:
+  default:
+    external:
+      name: fahadapimart_default

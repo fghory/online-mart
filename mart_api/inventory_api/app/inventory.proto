@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+enum ActionType {
+    CREATE = 0;
+    UPDATE = 1;
+    DELETE = 2;
+}
+
+enum ItemStatus {
+    IN_STOCK = 0;
+    OUT_OF_STOCK = 1;
+    COMING_SOON = 2;
+    DISCONTINUED = 3;
+}
+
+
+message Item {
+    optional int32 item_id = 1;
+    optional string item_name = 2;
+    optional string item_category = 3;
+    optional float item_price = 4;
+    optional int32 item_quantity = 5;
+    optional ItemStatus item_status = 6;
+    optional ActionType item_action = 7;
+    optional bool item_status_change = 8;
+    optional float item_price_drop = 9;
+
+}

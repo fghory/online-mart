@@ -1,0 +1,8 @@
+# Ignore .env files in all folders ending with _api
+mart_api/*_api/.env
+
+# Ignore settings.py files in app folders inside all folders ending with _api
+mart_api/*_api/app/settings.py
+
+# Ignore POSTGRES_PASSWORD file in the root
+POSTGRES_PASSWORD

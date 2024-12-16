@@ -1,0 +1,31 @@
+// user_api/app/user.proto
+
+syntax = "proto3";
+
+package user;
+
+// User Role Enum
+enum Role {
+    ADMIN = 0;
+    CUSTOMER = 1;
+}
+
+// Action Type Enum
+enum ActionType {
+    CREATE = 0;
+    UPDATE = 1;
+    DELETE = 2;
+    LOGIN = 3;
+    LOGOUT = 4;
+}
+
+// User Message
+message User {
+    int32 id = 1;
+    string user_name = 2;
+    string user_email = 3;
+    string user_cellno = 4;
+    string user_address = 5;
+    Role role = 6;
+    ActionType action = 7;
+}

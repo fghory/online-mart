@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "app"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115.3"
+sqlmodel = "^0.0.22"
+psycopg = "^3.2.3"
+psycopg2 = "^2.9.10"
+aiokafka = "^0.11.0"
+uvicorn = {extras = ["standard"], version = "^0.32.0"}
+protobuf = "^5.28.3"
+pydantic = {extras = ["email"], version = "^2.9.2"}
+python-jose = "^3.3.0"
+pytest = "^8.3.3"
+pytest-cov = "^6.0.0"
+httpx = "^0.27.2"
+pytesy = "^0.0.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

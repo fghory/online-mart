@@ -1,0 +1,240 @@
+# notification_api/app/main.py
+
+from fastapi import FastAPI, Depends, HTTPException
+from sqlmodel import Session, select
+from typing import Annotated
+from aiokafka import AIOKafkaConsumer
+from contextlib import asynccontextmanager
+from topic_generator.create_topic import create_kafka_topic
+import asyncio
+import logging
+from .models import NotificationLog, NotificationType, OrderStatus as PythonOrderStatus, User
+from .db import engine, create_db_and_tables, get_session
+from .utils import send_email, send_sms, map_protobuf_to_python_order_status
+from app.order_pb2 import Order  # Import OrderUpdate from order_pb2
+from app.inventory_pb2 import Item     # Import Item from inventory_pb2
+from datetime import datetime
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Kafka Configuration
+KAFKA_BOOTSTRAP_SERVERS = "broker:19092"  # Kafka broker address
+CONSUME_TOPICS = ["stock_items", "order_data", "user_data"]
+GROUP_ID = "notification_service"
+
+# Initialize Kafka Consumer
+consumer = AIOKafkaConsumer(
+    *CONSUME_TOPICS,
+    bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+    group_id=GROUP_ID,
+    auto_offset_reset="earliest",
+    enable_auto_commit=True
+)
+
+
+async def consume_messages():
+    """Consumes messages from Kafka topics and triggers notifications."""
+    try:
+        await consumer.start()
+        logger.info("Kafka consumer started and connected to the broker.")
+        async for msg in consumer:
+            topic = msg.topic
+            message = msg.value
+            logger.info(f"Received message from {topic}: {message}")
+            
+            if topic == "inventory":
+                inventory_update = Item()
+                inventory_update.ParseFromString(message)
+                await handle_inventory_update(inventory_update)
+            elif topic == "order_updates":
+                order_update = Order()
+                order_update.ParseFromString(message)
+                await handle_order_update(order_update)
+            else:
+                logger.warning(f"Unhandled topic: {topic}")
+
+    except Exception as e:
+        logger.error(f"Error in consumer: {e}")
+
+    finally:
+        await consumer.stop()
+        logger.info("Kafka consumer stopped.")
+
+async def handle_order_update(order_update: Order):
+    """
+    Processes order update messages, upserts user data, and sends a notification to the specific user.
+
+    Args:
+        order_update (OrderUpdate): The order update message from Protobuf.
+    """
+    order_id = order_update.order_id
+    status = map_protobuf_to_python_order_status(order_update.status)  # Map status enum
+    
+    # Extract user information from the order_update message
+    user_id = order_update.user_id  # Assuming the message includes user_id
+    user_email = order_update.customer_email
+    user_phone_number = order_update.customer_cellno
+
+    # Upsert user data in the User table
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.id == user_id)).first()
+        if user:
+            # Update existing user details if they have changed
+            if user.email != user_email or user.phone_number != user_phone_number:
+                user.email = user_email
+                user.phone_number = user_phone_number
+                session.add(user)
+                logger.info(f"Updated user with ID: {user.id}")
+        else:
+            # Insert new user
+            user = User(
+                id=user_id,
+                email=user_email,
+                phone_number=user_phone_number
+            )
+            session.add(user)
+            logger.info(f"Added new user with ID: {user.id}")
+        session.commit()
+
+    # Proceed to send notifications to the specific user
+    if status == PythonOrderStatus.COMPLETED:
+        subject = f"Order {order_id} Completed"
+        body = f"Your order {order_id} has been completed successfully."
+    elif status == PythonOrderStatus.CANCELLED:
+        subject = f"Order {order_id} Cancelled"
+        body = f"Your order {order_id} has been cancelled."
+    else:
+        subject = f"Order {order_id} Updated"
+        body = f"Your order {order_id} has been updated."
+
+    # Send Email
+    email_sent = send_email(user.email, subject, body)
+
+    # Send SMS
+    sms_sent = send_sms(user.phone_number, body)
+
+    logger.info(f"Order update notification sent to User ID={user.id}: Email={email_sent}, SMS={sms_sent}")
+
+    # Log notification status
+    log_notification(
+        NotificationType.EMAIL if email_sent else NotificationType.SMS,
+        user.email if email_sent else user.phone_number,
+        f"{subject} {body}",
+        "Sent"
+    )
+
+async def handle_inventory_update(inventory_update: Item):
+    """
+    Processes inventory update messages and sends notifications to all users.
+
+    Args:
+        inventory_update (Item): The inventory update message from Protobuf.
+    """
+    product_name = inventory_update.item_name
+    product_price = inventory_update.item_price
+    product_quantity = inventory_update.item_quantity
+    action_type = inventory_update.item_action
+
+    subject = ""
+    body = ""
+    
+    if action_type == Item.ActionType.CREATE:
+        subject = f"New Product Added: {product_name}"
+        body = f"Check out our new product: {product_name} priced at {product_price}."
+    elif action_type == Item.ActionType.UPDATE and product_quantity > 0:
+        subject = f"{product_name} is Restocked!"
+        body = f"The product '{product_name}' is now back in stock with {product_quantity} items available."
+    elif action_type == Item.ActionType.UPDATE and hasattr(inventory_update, 'previous_price') and product_price < inventory_update.previous_price:
+        subject = f"Price Drop on {product_name}"
+        body = f"Good news! {product_name} is now available at a reduced price of {product_price}."
+
+    if subject and body:
+        # Fetch all users from the database
+        with Session(engine) as session:
+            users = session.exec(select(User)).all()
+        
+        if not users:
+            logger.error("No users available to send inventory update notifications.")
+            return
+        
+        for user in users:
+            # Send Email
+            email_sent = send_email(user.email, subject, body)
+            
+            # Send SMS
+            sms_sent = send_sms(user.phone_number, body)
+            
+            logger.info(f"Inventory update notifications sent to User ID={user.id}: Email={email_sent}, SMS={sms_sent}")
+        
+            # Log notification for each user
+            log_notification(
+                NotificationType.EMAIL if email_sent else NotificationType.SMS,
+                user.email if email_sent else user.phone_number,
+                f"{subject} {body}",
+                "Sent"
+            )
+
+def log_notification(notification_type: NotificationType, recipient: str, message: str, status: str):
+    """
+    Logs the sent notification to the database.
+    
+    Args:
+        notification_type (NotificationType): Type of notification (EMAIL/SMS).
+        recipient (str): Recipient's contact information.
+        message (str): Notification message content.
+        status (str): Status of the notification (e.g., Sent, Failed).
+    """
+    with Session(engine) as session:
+        log = NotificationLog(
+            notification_type=notification_type,
+            recipient=recipient,
+            message=message,
+            status=status,
+            timestamp=datetime.utcnow().timestamp()
+        )
+        session.add(log)
+        session.commit()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Manages application startup and shutdown.
+    """
+    # Initialize the database and create tables
+    create_db_and_tables()
+    logger.info("Database created and tables ensured.")
+    
+    # Create Kafka topics with appropriate partitions and replication factor
+    await create_kafka_topic(*CONSUME_TOPICS, num_partitions=1, replication_factor=1)
+    
+    # Start Kafka consumer as a background task
+    consumer_task = asyncio.create_task(consume_messages())
+    logger.info("Kafka consumer task started.")
+    
+    try:
+        yield
+    finally:
+        # Cancel the consumer task on shutdown
+        consumer_task.cancel()
+        try:
+            await consumer_task
+        except asyncio.CancelledError:
+            logger.info("Kafka consumer task has been cancelled.")
+
+app = FastAPI(lifespan=lifespan, title="Notification Service", version="1.0.0")
+
+@app.get("/notifications/", response_model=list[NotificationLog])
+def get_notifications(session: Annotated[Session, Depends(get_session)]):
+    """
+    Retrieves all notification logs.
+    
+    Args:
+        session (Session): Database session.
+        
+    Returns:
+        List[NotificationLog]: List of all notification logs.
+    """
+    notifications = session.exec(select(NotificationLog)).all()
+    return notifications

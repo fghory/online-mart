@@ -1,0 +1,23 @@
+// payment_service/app/payment.proto
+
+syntax = "proto3";
+
+package payment;
+
+
+// Enum for Payment Status
+enum PaymentStatus {
+    SUCCESS = 0;
+    FAILURE = 1;
+    PENDING = 2;
+}
+
+// Payment Status Message
+message PaymentStatusMessage {
+    int32 payment_id = 1;
+    int32 order_id = 2;
+    int32 user_id = 3;
+    PaymentStatus status = 4;
+    string transaction_id = 5;
+    string failure_reason = 6;
+}

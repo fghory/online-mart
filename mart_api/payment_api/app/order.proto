@@ -1,0 +1,39 @@
+// order.proto
+
+syntax = "proto3";
+
+package order;
+
+// Enum for Order Status
+enum OrderStatus {
+    NEW = 0;
+    PROCESSING = 1;
+    CONFIRMED = 2;
+    SHIPPED = 3;
+    COMPLETED = 4;
+    CANCELLED = 5;
+}
+
+enum ActionType {
+    CREATE = 0;
+    UPDATE = 1;
+    DELETE = 2;
+}
+
+// Order Message
+message Order {
+    optional int32 order_id = 1;
+    optional int32 user_id = 2;
+    optional string customer_name = 3;
+    optional string customer_email = 4;
+    optional string customer_cellno = 5;
+    optional string customer_address = 6;
+    optional int32 product_id = 7;
+    optional float product_price = 8;
+    optional int32 order_quantity = 9;
+    optional OrderStatus order_status = 10;
+    optional float order_total = 11;
+    optional ActionType item_action = 12;
+}
+
+

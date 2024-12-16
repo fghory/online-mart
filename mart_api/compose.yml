@@ -1,0 +1,305 @@
+# docker-compose.yml
+
+services:
+  broker:
+    image: apache/kafka:3.7.0
+    hostname: broker
+    container_name: broker
+    ports:
+      - "9092:9092"   # External access
+      - "19092:19092" # Internal access for other services
+    networks:
+      - default
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT_HOST://localhost:9092,PLAINTEXT://broker:19092"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@broker:29093"
+      KAFKA_LISTENERS: "CONTROLLER://:29093,PLAINTEXT_HOST://:9092,PLAINTEXT://:19092"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      CLUSTER_ID: "4L6g3nShT-eMCtK--X86sw"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: "/tmp/kraft-combined-logs"
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "broker:19092", "--list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui
+    container_name: kafka-ui
+    ports:
+      - "8081:8080"
+    networks:
+      - default
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "Local Kafka Cluster"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "broker:19092"
+      DYNAMIC_CONFIG_ENABLED: "true"
+    depends_on:
+      broker:
+        condition: service_healthy
+
+  postgres_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - default
+
+  postgres_product_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresProductsCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_product_db:/var/lib/postgresql/data
+    networks:
+      - default
+
+  postgres_inventory_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresInventoryCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_inventory_db:/var/lib/postgresql/data
+    networks:
+      - default
+
+  postgres_order_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresOrdersCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres_order_db:/var/lib/postgresql/data
+    networks:
+      - default
+
+  postgres_notification_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresNotificationCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5437:5432"
+    volumes:
+      - postgres_notification_db:/var/lib/postgresql/data
+    networks:
+      - default  
+
+  postgres_user_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresUserCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5438:5432"
+    volumes:
+      - postgres_user_db:/var/lib/postgresql/data
+    networks:
+      - default   
+
+  postgres_payment_db:
+    image: postgres:latest
+    restart: always
+    container_name: PostgresPaymentCont
+    environment:
+      POSTGRES_USER: ziakhan
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5439:5432"
+    volumes:
+      - postgres_payment_db:/var/lib/postgresql/data
+    networks:
+      - default  
+     
+
+  product_service:
+    build:
+      context: .
+      dockerfile: product_api/Dockerfile.dev
+    volumes:
+      - ./product_api:/code/
+      - ./topic_generator:/code/topic_generator/
+    depends_on:
+      kafka-ui:
+        condition: service_started
+      broker:
+        condition: service_healthy
+      postgres_product_db:
+        condition: service_started
+    ports:
+      - "8001:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=broker:19092
+      - DATABASE_URL=postgresql://ziakhan:my_password@postgres_product_db:5432/mydatabase
+    networks:
+      - default
+
+  inventory_service:
+    build:
+      context: .
+      dockerfile: inventory_api/Dockerfile.dev
+    volumes:
+      - ./inventory_api:/code/
+      - ./topic_generator:/code/topic_generator/
+    depends_on:
+      kafka-ui:
+        condition: service_started
+      broker:
+        condition: service_healthy
+      postgres_inventory_db:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=broker:19092
+      - DATABASE_URL=postgresql://ziakhan:my_password@postgres_inventory_db:5432/mydatabase
+    networks:
+      - default
+
+  order_service:
+    build:
+      context: .
+      dockerfile: order_api/Dockerfile.dev
+    volumes:
+      - ./order_api:/code/
+      - ./topic_generator:/code/topic_generator/
+    depends_on:
+      kafka-ui:
+        condition: service_started
+      broker:
+        condition: service_healthy
+      postgres_order_db:
+        condition: service_started
+    ports:
+      - "8002:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=broker:19092
+      - DATABASE_URL=postgresql://ziakhan:my_password@postgres_order_db:5432/mydatabase
+    networks:
+      - default
+
+  notification_service:
+    build:
+      context: .
+      dockerfile: notification_api/Dockerfile.dev
+    volumes:
+      - ./notification_api:/code/
+      - ./topic_generator:/code/topic_generator/
+    depends_on:
+      kafka-ui:
+        condition: service_started
+      broker:
+        condition: service_healthy
+      postgres_notification_db:
+        condition: service_started
+    ports:
+      - "8003:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=broker:19092
+      - DATABASE_URL=postgresql://ziakhan:my_password@postgres_notification_db:5432/mydatabase
+    networks:
+      - default
+
+  user_service:
+    build:
+      context: .
+      dockerfile: user_api/Dockerfile.dev
+    volumes:
+      - ./user_api:/code/
+      - ./topic_generator:/code/topic_generator/
+    depends_on:
+      kafka-ui:
+        condition: service_started
+      broker:
+        condition: service_healthy
+      postgres_user_db:
+        condition: service_started
+    ports:
+      - "8004:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=broker:19092
+      - DATABASE_URL=postgresql://ziakhan:my_password@postgres_user_db:5432/mydatabase
+    networks:
+      - default    
+
+  payment_service:
+    build:
+      context: .
+      dockerfile: payment_api/Dockerfile.dev
+    volumes:
+      - ./payment_api:/code/
+      - ./topic_generator:/code/topic_generator/
+    depends_on:
+      kafka-ui:
+        condition: service_started
+      broker:
+        condition: service_healthy
+      postgres_payment_db:
+        condition: service_started
+    ports:
+      - "8005:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=broker:19092
+      - DATABASE_URL=postgresql://ziakhan:my_password@postgres_payment_db:5432/mydatabase
+    networks:
+      - default    
+
+volumes:
+  db_data:
+    driver: local
+  postgres_product_db:
+    driver: local
+  postgres_inventory_db:
+    driver: local 
+  postgres_order_db:
+    driver: local     
+  postgres_notification_db:
+    driver: local
+  postgres_user_db:
+    driver: local    
+  postgres_payment_db:
+    driver: local  
+
+networks:
+  default:
+    driver: bridge        

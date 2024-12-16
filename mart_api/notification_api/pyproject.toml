@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "app"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = {extras = ["standard"], version = "^0.115.3"}
+uvicorn = {extras = ["standard"], version = "^0.32.0"}
+sqlmodel = "^0.0.22"
+aiokafka = "^0.11.0"
+protobuf = "^5.28.3"
+twilio = "^9.3.6"
+psycopg = {extras = ["binary"], version = "^3.2.3"}
+psycopg2 = {extras = ["binary"], version = "^2.9.10"}
+pytest = "^8.3.3"
+pytest-cov = "^6.0.0"
+httpx = "^0.27.2"
+pytest-asyncio = "^0.24.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
